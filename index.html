@@ -360,7 +360,7 @@ DATA_PERMS.forEach(d => { d.v.prospect = d.v.prospect || ['N']; });
 // Sticky-note annotations: purpose + what changes by role.
 const ANNO = {
   login: { what: 'Single entry point for every role. Invited users land here from their email link to set a password.', roles: { all: 'Same screen for everyone. Company reps without an invite see "Request access", which creates an item in the Approvals queue.' } },
-  dashboard: { what: 'Home base after login. A "Due soon" strip sits at the top for every role, so deadlines are the first thing anyone sees.', roles: { prospect: 'Application progress and deadlines while applying, status once submitted, and enrollment steps once accepted.', admin: 'Integration health, pending approvals, platform activity.', pm: 'Program KPIs, coach and fellow compliance flags, upcoming milestones.', coach: 'Headline shows the coach\'s one Program Track (Consulting, Finance, Tech, or Corporate Management). A cohort toggle (by graduation year) filters everything. Four KPIs: calls today/week/month, calls with notes, cohort-average feedback (links to trends), and fellows who still need to book this month (links to Nudge).', fellow: 'Tasks and module due dates, next coach call, application tracker, and fellow-facing notes from their coach.', company: 'Depends on the account\'s access level. L1: applicants to their postings. L2: adds eligible fellows who haven\'t applied. L3 (Premier): adds benchmarks against other postings on the site. Use the Access level switch at the top to compare.' } },
+  dashboard: { what: 'Home base after login. A "Due soon" strip sits at the top for every role, so deadlines are the first thing anyone sees.', roles: { prospect: 'Application progress and deadlines while applying, status once submitted, and enrollment steps once accepted.', admin: 'Integration health, pending approvals, platform activity.', pm: 'Program KPIs, coach and fellow compliance flags, upcoming milestones.', coach: 'Headline shows the coach\'s one Program Track (Consulting, Finance, Tech, or Corporate Management). A cohort toggle (by graduation year) filters everything. Four KPIs: calls this week and month, calls with notes, cohort-average feedback (links to trends), and fellows who still need to book this month (links to Nudge).', fellow: 'Tasks and module due dates, next coach call, application tracker, and fellow-facing notes from their coach.', company: 'Depends on the account\'s access level. L1: applicants to their postings. L2: adds eligible fellows who haven\'t applied. L3 (Premier): adds benchmarks against other postings on the site. Use the Access level switch at the top to compare.' } },
   users: { what: 'Admin-only directory of every account. Invite users, assign one role, attach them to a program and (for fellows) a coach.', roles: { admin: 'Full edit. No other role sees this page.' } },
   approvals: { what: 'One queue for anything that needs a human yes or no: job postings, coach reassignments, and new sign-ups.', roles: { admin: 'Sees every program\'s queue.', pm: 'Sees only requests tied to their program and its accounts.' } },
   program: { what: 'Where a program is configured (cohorts, call cadence, required modules) and where compliance is monitored.', roles: { admin: 'Can create programs and edit any of them.', pm: 'Edits their program; owns the compliance follow-ups.' } },
@@ -484,11 +484,18 @@ const SEARCH = (ph = 'Search…') => `<div class="row" style="margin-bottom:16px
 const P = {};
 
 // Coach cohorts: fellows are grouped by expected graduation year.
+// Calls: today = 1:1 (t1) + group; week/month split into completed (wd/md) vs still scheduled. Cancelled and no-shows are left out.
 const COHORTS = {
-  all:  { label: 'All cohorts',   n: 150, today: 14, week: 68, month: 245, notes: '92%', fb: '4.7', need: 38 },
-  2027: { label: 'Class of 2027', n: 64,  today: 6,  week: 29, month: 104, notes: '95%', fb: '4.8', need: 15 },
-  2028: { label: 'Class of 2028', n: 86,  today: 8,  week: 39, month: 141, notes: '89%', fb: '4.6', need: 23 }
+  all:  { label: 'All cohorts',   n: 150, today: 14, t1: 11, week: 68, wd: 52, month: 245, md: 229, notes: '92%', fb: '4.7', need: 38 },
+  2027: { label: 'Class of 2027', n: 64,  today: 6,  t1: 5,  week: 29, wd: 22, month: 104, md: 97,  notes: '95%', fb: '4.8', need: 15 },
+  2028: { label: 'Class of 2028', n: 86,  today: 8,  t1: 6,  week: 39, wd: 30, month: 141, md: 132, notes: '89%', fb: '4.6', need: 23 }
 };
+// One horizontal stacked bar: completed (solid) then scheduled (hatched), labeled with counts.
+const STACK_BAR = (label, done, total) => { const sched = total - done, pct = Math.round(done / total * 100);
+  return `<div style="margin-top:8px"><div class="row" style="font-size:11px"><b class="sp">${label}</b><b style="font-family:var(--display);font-size:16px">${total}</b></div>
+    <div class="row" style="gap:0;height:14px;border:1.5px solid var(--ink);border-radius:4px;overflow:hidden;margin-top:3px" title="${done} completed · ${sched} scheduled"><span style="width:${pct}%;height:100%;background:var(--ink)"></span><span style="flex:1;height:100%;background:repeating-linear-gradient(45deg,var(--fill) 0 3px,var(--soft) 3px 5px)"></span></div>
+    <div class="row" style="font-size:10px;margin-top:3px"><span class="sp">${done} completed</span><span style="color:var(--ink2)">${sched} scheduled</span></div></div>`; };
+const CALL_BARS = c => `<div class="row" style="font-size:10px;gap:8px"><span class="sp" style="font-family:var(--mono);text-transform:uppercase;color:var(--ink2)">Calls</span><span class="row" style="gap:3px"><i style="width:9px;height:9px;background:var(--ink);display:inline-block"></i>Completed</span><span class="row" style="gap:3px"><i style="width:9px;height:9px;border:1px solid var(--ink);background:repeating-linear-gradient(45deg,var(--fill) 0 2px,var(--soft) 2px 3px);display:inline-block"></i>Scheduled</span></div>${STACK_BAR('This week', c.wd, c.week)}${STACK_BAR('This month', c.md, c.month)}<div style="font-size:9.5px;color:var(--ink2);margin-top:6px">Excludes cancelled calls and no-shows.</div>`;
 const COHORT_TOGGLE = () => `<div class="seg">${['all', '2027', '2028'].map(k => `<button data-cohort="${k}" class="${String(S.cohort) === k ? 'on' : ''}">${k === 'all' ? 'All' : 'Class of ' + k}</button>`).join('')}</div>`;
 
 P.login = () => `
@@ -525,13 +532,13 @@ P.dashboard = r => {
     return HDR(`Good afternoon, Marcus`, `Thursday, Oct 29 · ${c.n} assigned fellows${S.cohort === 'all' ? ' across 2 cohorts' : ' · ' + c.label} · Program Track: Finance`, COHORT_TOGGLE() + B('Notifications (3)', { sm: 1 })) + `<div class="stack">
     ${DUESTRIP([['Call notes owed: Aisha B.', 'Call ended Oct 28 · notes due within 48h', 'TODAY', 1], ['Review Jordan\'s resume task', 'Task assigned Oct 27', 'OCT 30', 1], ['Monthly caseload check-in', 'Program requirement', 'NOV 1']])}
     <div class="g4">
-      ${W('KPI tile · Calls', `<div class="row" style="gap:0;justify-content:space-between">${[[c.today, 'Today'], [c.week, 'This week'], [c.month, 'This month']].map(x => `<div class="kpi" style="text-align:center;flex:1"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('<div style="width:1px;align-self:stretch;background:var(--soft)"></div>')}</div>`)}
+      ${W('KPI tile · Calls', CALL_BARS(c), { hl: 'kpi-calls' })}
       ${KPI(c.notes, 'Calls with notes', 'Target 90%')}
       ${W('KPI tile · Feedback', `<div class="kpi"><b>${c.fb}</b><span>Avg fellow feedback · cohort aggregate</span></div><div style="height:22px;margin-top:6px;border-bottom:1px solid var(--soft);background:linear-gradient(to top right,transparent 48%,var(--ink2) 49%,var(--ink2) 51%,transparent 52%)"></div><div style="margin-top:8px">${B('See trends →', { sm: 1, go: 'coachstats' })}</div>`)}
       ${W('KPI tile · Scheduling', `<div class="kpi"><b>${c.need}</b><span>Fellows who need to schedule a call this month</span></div><div style="margin-top:8px">${B('Nudge fellows →', { sm: 1, p: 1, go: 'nudge' })}</div>`, { c: 'key' })}
     </div>
     <div class="g2">
-      ${W('Today\'s calls', ITEM('Jordan A. · 1:1 coach call', '4:00 PM · Class of 2028 · agenda: resume review', B('Open', { sm: 1, go: 'fellows' }), { av: 'JA', hl: 'coach-upcoming' }) + ITEM('Office hours (group)', '6:00 PM · 3 signed up', B('Open', { sm: 1 }), { av: 'OH' }))}
+      ${W('Today\'s calls', `<div style="font-size:11.5px;margin-bottom:6px" data-hl="today-calls"><b style="font-family:var(--display);font-size:18px">${c.today}</b> calls today · <b>${c.t1}</b> 1:1 ${c.t1 === 1 ? 'call' : 'calls'} and <b>${c.today - c.t1}</b> group ${c.today - c.t1 === 1 ? 'call' : 'calls'}</div>` + ITEM('Jordan A. · 1:1 coach call', '4:00 PM · Class of 2028 · agenda: resume review', B('Open', { sm: 1, go: 'fellows' }), { av: 'JA', hl: 'coach-upcoming' }) + ITEM('Office hours (group)', '6:00 PM · 3 signed up', B('Open', { sm: 1 }), { av: 'OH' }) + `<div style="font-size:10.5px;color:var(--ink2);margin-top:6px">+ ${c.today - 2} more today · ${B('See full calendar', { sm: 1, go: 'schedule' })}</div>`)}
       ${W('Fellows needing attention', ITEM('Sam P.', 'No call booked in 30 days', C('Flag', 'd'), { av: 'SP' }) + ITEM('Lee W.', '2 overdue assignments', C('Flag', 'd'), { av: 'LW' }) + ITEM('Riya M.', 'Asked you a question · 1d', C('Reply'), { av: 'RM' }))}
     </div></div>`;
   }
@@ -613,6 +620,9 @@ P.fellows = r => {
     </div></div>`;
   return HDR(pageTitle('fellows', r), r === 'coach' ? `${COHORTS[S.cohort].n} assigned fellows · ${COHORTS[S.cohort].label} · Program Track: Finance` : 'All 2,412 fellows and 16 coaches in Class of 2027', r === 'coach' ? COHORT_TOGGLE() : C('Private notes: read-only', 'g')) + `<div class="split">${list}${detail}</div>`;
 };
+
+// Company rep name that opens their About me (defined here so the Nudge table can use it at load).
+const REP = (n = 'Kim L.') => `<u data-modal="aboutme" style="cursor:pointer;text-underline-offset:2px" title="View About me">${n}</u>`;
 
 // Nudges: coaches nudge their own fellows; PMs nudge fellows, coaches, or company reps. Fellows and reps can't nudge.
 const NUDGE_AUD = {
@@ -901,7 +911,6 @@ P.coachinfo = r => {
 };
 
 // About me: a pop-up that opens wherever a company rep's name is clicked. Open to every role.
-const REP = (n = 'Kim L.') => `<u data-modal="aboutme" style="cursor:pointer;text-underline-offset:2px" title="View About me">${n}</u>`;
 const ABOUT_VIEW = (preview) => `<div class="stack">
     ${W('About me', `<div class="row"><div class="img" style="width:72px;height:72px;border-radius:50%">photo</div><div class="sp"><b style="font-family:var(--display);font-size:19px">Kim L.</b><div style="font-size:12px;color:var(--ink2)">University Recruiting Lead · Acme Corp</div><div class="row" style="margin-top:8px">${C('↗ LinkedIn')}</div></div>${!preview && S.role !== 'company' ? B('Message Kim', { sm: 1, p: 1, go: 'messages' }) : ''}</div>`, { c: 'key' })}
     ${W('Short bio', `<div style="font-size:12.5px;line-height:1.5">I lead campus recruiting for Acme's analyst programs. I started as a summer analyst myself and love helping first-time applicants get comfortable with the process.</div>`)}
@@ -1136,11 +1145,13 @@ const PROGRAMS = [
   { lv: [`mba`], n: `MBA Professional Development`, dl: `Mar 1, 2027`, app: `$65`, fee: `$550`, note: `Fixed program fee`, sub: [], goals: [[`Goal 1`, `Secure an MBA internship`], [`Goal 2`, `Secure a full-time job`]] },
   { lv: [`ug`, `mba`], n: `Turn Pro`, dl: `Rolling · self-paced`, app: `None`, fee: `$20`, note: `Start anytime and go at your own pace`, sub: [], goals: [[`Goal 1`, `Discover your career path at your own pace, with the MLT AI Assistant`]] },
   { lv: [`exec`], n: `Senior Executive Leadership Fellowship (SELF)`, dl: `Mar 15, 2027`, app: `$20`, fee: `$500`, note: `Fixed program fee`, sub: [], goals: [[`Goal 1`, `Get promoted at your current company`], [`or`, `Move to a new company with a higher title or pay`]] },
-  { lv: [`exec`], n: `Career Advancement Program (CAP)`, dl: `By nomination`, app: `Nominations only`, fee: `$20,000`, note: `You must be nominated to join. You cannot apply directly`, sub: [], goals: [[`Goal 1`, `Executive training and advancement`]], nominated: true }
+  { lv: [`exec`], n: `Career Advancement Program (CAP)`, dl: `By nomination`, app: `Nominations only`, fee: `$20,000`, note: `You must be nominated to join. You cannot apply directly`, sub: [], goals: [[`Goal 1`, `Executive training and advancement`]], nominated: true },
+  // v0.2.1 · Added at the end so earlier program positions stay the same; ord puts it before MBA Prep on screen.
+  { lv: [`mba`], n: `Future MBA`, dl: `Rolling`, app: `$50`, fee: `$200`, note: `Rolling deadlines: apply anytime`, sub: [], goals: [[`Goal 1`, `Finish admissions tests (e.g. GMAT, GRE)`], [`Goal 2`, `Gain admission to the MBA Prep program`]], ord: 1.5 }
 ];
 const PROG = () => PROGRAMS[S.prog] || PROGRAMS[1];
 const LEVELS = [[`ug`, `Undergraduate`], [`mba`, `MBA`], [`exec`, `Executive`]];
-const shownPrograms = () => PROGRAMS.map((p, i) => [p, i]).filter(([p]) => p.lv.includes(S.plv));
+const shownPrograms = () => PROGRAMS.map((p, i) => [p, i]).filter(([p]) => p.lv.includes(S.plv)).sort((a, b) => (a[0].ord ?? a[1]) - (b[0].ord ?? b[1]));
 const GOALS = p => `<div class="goals">${p.goals.map(([l, t]) => `<div class="goal-row${l === 'or' ? ' alt' : ''}">${l === 'or' ? '<span class="goal-or">or</span>' : '<span class="goal" aria-hidden="true"></span>'}<div><div class="goal-l">${l === 'or' ? 'Alternate goal' : l}</div><b>${t}</b></div></div>`).join('')}</div>`;
 
 P.programs = r => HDR(r === 'prospect' ? 'Choose a Program' : 'Programs', 'Every program states its goal up front. Compare goals, deadlines, and fees, then choose one to start your application.', C('Deadlines are placeholders', 'g')) + `<div class="stack">
@@ -2522,7 +2533,7 @@ FLOWS.forEach(f => { if (f.id === 'focus') f.steps.splice(4, 0, { r: 'coach', p:
 <script>/* pages22.js */
 // v0.2 · Resources: collapsible sections, staff editing, PM approval, and per-program visibility.
 // Only Brag Book entry guides are global. Everything else is shown to the programs a PM picks, and only once a PM makes it live.
-const ALL_PROGS = ['Career Prep', 'MBA Prep', 'MBA PD', 'Ascend', 'Turn Pro', 'SELF', 'CAP'];
+const ALL_PROGS = ['Career Prep', 'Future MBA', 'MBA Prep', 'MBA PD', 'Ascend', 'Turn Pro', 'SELF', 'CAP'];
 const RST = { live: ['Live · fellow-facing', 'd'], pending: ['Awaiting PM approval', ''], draft: ['Draft', 'g'] };
 // Each resource: name, programs, track ('' = any track), note, status, last edit.
 const RX = (n, progs, track, note, st = 'live', by = '') => ({ n, progs, track, note, st, by });
@@ -2566,7 +2577,7 @@ const RES_LIB = [
 ];
 // The sample fellow: Jordan, Career Prep · Finance.
 const ME_PROG = { prog: 'Career Prep', track: 'Finance' };
-const LIBF_P = { cp: ['Career Prep'], mba: ['MBA Prep', 'MBA PD'], exec: ['SELF', 'CAP'], ug: ['Ascend', 'Turn Pro'] };
+const LIBF_P = { cp: ['Career Prep'], mba: ['Future MBA', 'MBA Prep', 'MBA PD'], exec: ['SELF', 'CAP'], ug: ['Ascend', 'Turn Pro'] };
 const progLabel = x => x.progs.length === ALL_PROGS.length ? 'All programs · global' : x.progs.join(' · ') + (x.track ? ` · ${x.track} track` : '');
 // Best match: same program and same track first, then same program with any track, then the rest.
 const matchRank = x => (x.progs.includes(ME_PROG.prog) ? 2 : 0) + (x.track === ME_PROG.track ? 1 : 0);
@@ -2763,15 +2774,363 @@ FLOWS.push({ id: 'coachbadges', title: 'Coach earns and shows badges', roles: ['
   { r: 'fellow', p: 'coachinfo', set: { ciSel: 0 }, t: 'Jordan sees Marcus\'s coach badges on Coach Info.' }
 ]});
 </script>
+<script>/* pages26.js */
+// v0.2.1 · Coaching Insights: AI summary of feedback comments (What went well / What could be better)
+// and cohort-level insights on fellows' interview readiness, resume readiness, and portal use. Aggregates only.
+const pctOf = (p, n) => Math.round(p * n / 100);
+const SPLIT = (parts, n) => `<div class="row" style="gap:0;height:10px;border:1px solid var(--ink);border-radius:5px;overflow:hidden;margin:6px 0">${parts.map(([l, p], i) => `<span title="${l}" style="width:${p}%;height:100%;background:${['var(--ink)', '#888', '#ccc', '#fff'][i]}"></span>`).join('')}</div><div class="row" style="gap:10px;flex-wrap:wrap;font-size:10.5px">${parts.map(([l, p]) => `<span>${l} <b>${p}%</b> <span style="color:var(--ink2)">(${pctOf(p, n)})</span></span>`).join('')}</div>`;
+const THEME = (t, n, ex) => ITEM(t, `${n} responses · e.g. "${ex}"`, C(n >= 10 ? 'Strong theme' : 'Theme', n >= 10 ? 'd' : ''));
+
+const FEEDBACK_AI = () => { const resp = { all: 112, 2027: 49, 2028: 63 }[S.cohort];
+  return W('AI summary of feedback comments', `<div style="font-size:11px;color:var(--ink2);margin-bottom:10px">Summarized from ${resp} written comments on post-call surveys (last 6 months). Quotes are paraphrased and grouped into themes, so no comment can be traced to one fellow. A theme appears only when 3 or more fellows mention it.</div>
+    <div class="g2" style="gap:14px">
+      <div><div class="goal-l" style="margin-bottom:6px">What went well?</div>
+        <p style="font-size:12px;line-height:1.5;margin:0 0 8px">Fellows say your calls are <b>organized and leave them with clear next steps</b>. Many credit you with making the resume and networking work feel manageable.</p>
+        ${THEME('Clear next steps after every call', 14, 'I always leave knowing exactly what to do')}${THEME('Resume feedback is specific', 11, 'the STAR rewrite made a huge difference')}${THEME('Prepared and remembers context', 8, 'already knew where I left off')}</div>
+      <div><div class="goal-l" style="margin-bottom:6px">What could be better?</div>
+        <p style="font-size:12px;line-height:1.5;margin:0 0 8px">The most common request is <b>more time on interview practice</b>, especially technical questions. A few fellows want calls to start on time or to get notes sooner.</p>
+        ${THEME('More mock interviews and technical prep', 9, 'wish we practiced DCF questions out loud')}${THEME('Calls sometimes start late', 4, 'a few calls started 10 minutes late')}${THEME('Fellow-facing notes arrive slowly', 3, 'notes came a few days after the call')}</div>
+    </div>
+    <div class="row" style="margin-top:10px;border-top:1px dashed var(--soft);padding-top:8px;gap:6px"><span style="font-size:11px" class="sp"><b>Suggested focus:</b> book a mock interview with fellows who have a Round 2 coming up. The staff-only mock interview library has Finance technical questions.</span>${B('Open Resources', { sm: 1, go: 'library' })}${B('👍', { sm: 1 })}${B('👎', { sm: 1 })}</div>`, { c: 'key', hl: 'insights-feedback' }); };
+
+const FELLOW_INSIGHTS = () => { const n = COHORTS[S.cohort].n;
+  return `<div class="goal-l" style="margin:4px 0 -4px">Your fellows · generalized insights · ${COHORTS[S.cohort].label} · ${n} fellows</div>
+  <div class="g3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+    ${W('Interview readiness', `${SPLIT([['Ready', 34], ['Developing', 41], ['Not yet', 15], ['Not assessed', 10]], n)}
+      <div style="font-size:11.5px;line-height:1.5;margin-top:8px"><b>Insight:</b> most "Developing" fellows score well on behavioral answers but low on technical ones. 22 fellows have an interview in the next 14 days and no mock interview booked.</div>
+      <div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Based on your 1 to 5 assessment plus the AI pitch score.</div>
+      <div class="row" style="margin-top:8px;gap:6px">${B('See these fellows', { sm: 1, go: 'roster' })}</div>`, { hl: 'insights-interview' })}
+    ${W('Resume readiness', `${SPLIT([['80+', 38], ['60 to 79', 44], ['Below 60', 12], ['No resume', 6]], n)}
+      <div style="font-size:11.5px;line-height:1.5;margin-top:8px"><b>Insight:</b> median AI resume score is <b>74</b> (up 6 since September). Fellows below 60 can't apply to most company postings. Their most common gap is bullets with no results or numbers.</div>
+      <div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Uses each fellow's pinned or highest-scoring resume. Program average: 71.</div>
+      <div class="row" style="margin-top:8px;gap:6px">${B('See fellows below 60', { sm: 1, go: 'roster' })}</div>`, { hl: 'insights-resume' })}
+    ${W('Portal use', `${ITEM('Active in the last 30 days', '81% · program average 76%', C('↑'))}${ITEM('Used the MLT Assistant', '58% · top use: interview prep questions', '')}${ITEM('Opened Resources', '44% · most opened: Technical Interview Prep · Finance', '')}${ITEM('Updated their Brag Book', '37%', '')}${ITEM('Not logged in for 30+ days', `${pctOf(9, n)} fellows`, C('Nudge', 'g'))}
+      <div style="font-size:11.5px;line-height:1.5;margin-top:8px"><b>Insight:</b> fellows who update their Brag Book have higher resume scores. Only a third use it.</div>
+      <div class="row" style="margin-top:8px;gap:6px">${B('Nudge inactive fellows', { sm: 1, go: 'nudge' })}</div>`, { hl: 'insights-usage' })}
+  </div>`; };
+
+const _coachstats26 = P.coachstats;
+const OLD_THEMES = () => W('Anonymized comments (themes)', ITEM('"Clear next steps"', 'Mentioned in 9 responses', '') + ITEM('"More time on interview prep"', 'Mentioned in 4 responses', ''));
+P.coachstats = r => _coachstats26(r).replace(OLD_THEMES(), FEEDBACK_AI()).replace(/<\/div>$/, FELLOW_INSIGHTS() + '</div>');
+
+PERMS.coachstats.coach = ['V', 'cohort aggregates + AI summaries'];
+DATA_PERMS.push(
+  { name: 'AI summary of coach feedback comments', sub: 'themes only, 3+ fellows per theme', p: 'coachstats', v: { admin: ['N'], pm: ['V', 'per coach, with raw comments'], coach: ['V', 'own · paraphrased themes'], fellow: ['N'], company: ['N'], prospect: ['N'] } },
+  { name: 'Fellow readiness + portal use insights', sub: 'cohort-level aggregates', p: 'coachstats', v: { admin: ['V'], pm: ['V', 'by coach + program'], coach: ['V', 'own fellows'], fellow: ['N'], company: ['N'], prospect: ['N'] } }
+);
+ANNO.coachstats.what += ' The AI summarizes written feedback into two lists, "What went well?" and "What could be better?", with paraphrased themes and counts. Below that are generalized insights on the coach\'s fellows: interview readiness, resume readiness (AI resume scores), and portal use (activity, Assistant, Resources, Brag Book).';
+ANNO.coachstats.roles.coach += ' Comments are paraphrased and grouped; a theme shows only when 3 or more fellows mention it.';
+FLOWS.push({ id: 'insights', title: 'Coach reviews Coaching Insights', roles: ['coach'], steps: [
+  { r: 'coach', p: 'coachstats', hl: 'insights-feedback', t: 'Marcus reads the AI summary of the feedback: fellows value clear next steps and want more interview practice.' },
+  { r: 'coach', p: 'coachstats', hl: 'insights-interview', t: '22 fellows have an interview within 14 days and no mock interview booked.' },
+  { r: 'coach', p: 'coachstats', hl: 'insights-resume', t: 'Median resume score is 74. Fellows below 60 can\'t apply to most company postings.' },
+  { r: 'coach', p: 'coachstats', hl: 'insights-usage', t: 'Only a third of fellows use the Brag Book. Marcus nudges inactive fellows.' }
+]});
+</script>
+<script>/* pages27.js */
+// v0.2.1 · Scheduling: 1:1 vs group slots, group rules, time zones for everyone, availability templates, and automatic calendar updates
+// when a fellow cancels or reschedules. Coach hours are stored in the coach's time zone and shown in each viewer's own.
+// Time zones use the standard world (IANA) list. A sample is shown here; the real list has every zone and search finds any of them.
+// [label, abbreviation, UTC offset in hours on the sample date (Nov 5, 2026), group, search words]
+const TZS = {
+  'America/New_York': ['Eastern Time', 'ET', -5, 'US + Canada', 'New York Detroit Atlanta Toronto'],
+  'America/Chicago': ['Central Time', 'CT', -6, 'US + Canada', 'Chicago Houston Dallas'],
+  'America/Denver': ['Mountain Time', 'MT', -7, 'US + Canada', 'Denver Salt Lake City'],
+  'America/Phoenix': ['Arizona (no daylight saving)', 'MST', -7, 'US + Canada', 'Phoenix'],
+  'America/Los_Angeles': ['Pacific Time', 'PT', -8, 'US + Canada', 'Los Angeles San Francisco Seattle'],
+  'America/Anchorage': ['Alaska', 'AKT', -9, 'US + Canada', 'Anchorage'],
+  'Pacific/Honolulu': ['Hawaii', 'HST', -10, 'US + Canada', 'Honolulu'],
+  'America/Puerto_Rico': ['Atlantic · Puerto Rico', 'AST', -4, 'US + Canada', 'San Juan'],
+  'America/St_Johns': ['Newfoundland', 'NT', -3.5, 'US + Canada', 'St. Johns'],
+  'America/Mexico_City': ['Mexico City', 'CST', -6, 'Latin America', 'Mexico'],
+  'America/Bogota': ['Bogotá', 'COT', -5, 'Latin America', 'Colombia'],
+  'America/Sao_Paulo': ['São Paulo', 'BRT', -3, 'Latin America', 'Brazil'],
+  'Etc/UTC': ['Coordinated Universal Time', 'UTC', 0, 'Europe + Africa', 'UTC GMT'],
+  'Europe/London': ['London', 'GMT', 0, 'Europe + Africa', 'United Kingdom'],
+  'Europe/Paris': ['Paris · Berlin · Madrid', 'CET', 1, 'Europe + Africa', 'France Germany Spain'],
+  'Africa/Lagos': ['Lagos', 'WAT', 1, 'Europe + Africa', 'Nigeria'],
+  'Africa/Johannesburg': ['Johannesburg', 'SAST', 2, 'Europe + Africa', 'South Africa'],
+  'Africa/Nairobi': ['Nairobi', 'EAT', 3, 'Europe + Africa', 'Kenya'],
+  'Asia/Dubai': ['Dubai', 'GST', 4, 'Asia + Pacific', 'UAE'],
+  'Asia/Kolkata': ['India', 'IST', 5.5, 'Asia + Pacific', 'Mumbai Delhi'],
+  'Asia/Singapore': ['Singapore', 'SGT', 8, 'Asia + Pacific', ''],
+  'Asia/Tokyo': ['Tokyo', 'JST', 9, 'Asia + Pacific', 'Japan'],
+  'Australia/Sydney': ['Sydney', 'AEDT', 11, 'Asia + Pacific', 'Australia'],
+  'Pacific/Auckland': ['Auckland', 'NZDT', 13, 'Asia + Pacific', 'New Zealand']
+};
+const COACH_TZ = 'America/New_York';
+const utc = o => `UTC${o >= 0 ? '+' : '−'}${Math.floor(Math.abs(o))}${Math.abs(o) % 1 ? ':30' : ''}`;
+const tzName = (k = S.tz) => `${TZS[k][0]} (${TZS[k][1]} · ${utc(TZS[k][2])})`;
+// h:m is in the coach's time zone; show it in the viewer's.
+const HM = (h, m = 0) => { let t = h * 60 + m + (TZS[S.tz][2] - TZS[COACH_TZ][2]) * 60, day = '';
+  if (t >= 1440) { t -= 1440; day = ' (next day)'; } else if (t < 0) { t += 1440; day = ' (day before)'; }
+  const hh = Math.floor(t / 60), mm = t % 60; return `${((hh + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'PM' : 'AM'}${day}`; };
+const TZ_PICK = () => `<span class="row" style="gap:6px;font-size:11px" data-hl="tz-pick"><span style="font-family:var(--mono);font-size:9px;text-transform:uppercase;color:var(--ink2)">Your time zone</span><button class="btn sm" data-modal="tzPick" style="min-width:200px;text-align:left">🌐 ${tzName()} ▾</button></span>`;
+const TZ_LINE = () => `<div style="font-size:10.5px;color:var(--ink2);margin-top:8px">🌐 Times shown in <b>${tzName()}</b>. Marcus T. is in Eastern Time.${S.tz !== COACH_TZ ? ' Your calendar invites use your time zone.' : ''} Saved to your profile; change it any time here.</div>`;
+M.tzPick = () => { const groups = [...new Set(Object.values(TZS).map(z => z[3]))];
+  return MH('Choose your time zone') + `<div class="stack" style="gap:10px">
+  ${I('⌕ Search by city, country, or zone (e.g. Lagos, Kenya, GMT+1)')}
+  <div class="row" style="font-size:11px;gap:6px"><span class="sp">Detected from your browser: <b>Eastern Time</b></span>${B('Use detected', { sm: 1 }).replace('<button', `<button data-tz="${COACH_TZ}"`)}</div>
+  <div style="max-height:340px;overflow:auto;border:1px solid var(--soft);border-radius:6px;padding:4px 8px" data-hl="tz-list">${groups.map(g => `<div class="goal-l" style="margin:8px 0 2px">${g}</div>` + Object.entries(TZS).filter(([, z]) => z[3] === g).map(([k, z]) => `<div class="item" data-tz="${k}" style="cursor:pointer;${k === S.tz ? 'background:var(--fill);border-radius:6px;padding-left:6px' : ''}"><div class="t"><b>${z[0]}${k === S.tz ? ' ✓' : ''}</b><span>${k.replace(/_/g, ' ')} · ${z[1]} · ${utc(z[2])}${z[4] ? ' · ' + z[4] : ''}</span></div><span style="font-family:var(--mono);font-size:10px">${(() => { const s = S.tz; S.tz = k; const v = HM(16); S.tz = s; return v; })()}</span></div>`).join('')).join('')}
+    <div style="font-size:10.5px;color:var(--ink2);margin:8px 0">The full list has every world time zone (about 400). Search finds any of them.</div></div>
+  <div style="font-size:10.5px;color:var(--ink2)">The right column shows what 4:00 PM Eastern (Marcus's 4 PM call) would be in each zone. Daylight saving is handled automatically.</div>
+  <div class="row"><span class="sp"></span>${B('Cancel', { sm: 1, close: 1 })}</div></div>`; };
+
+// Templates. Each slot: '1' = 1:1, 'g' = group, 'b' = booked 1:1, 'gb' = group with sign-ups, '' = unavailable, 'h' = holiday.
+const HOURS = [10, 12, 14, 16, 18];
+const AV_TPL = {
+  std: { n: 'Standard 5-day week', sub: 'Mon to Fri · built in', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], grid: [['1', 'b', '1', '', ''], ['1', '1', '', 'b', ''], ['', '1', '1', '1', ''], ['1', 'b', '1', '', 'gb'], ['1', '1', '', '', '']] },
+  four: { n: '4-day week · Monday holiday', sub: 'Tue to Fri · built in', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], grid: [['h', 'h', 'h', 'h', 'h'], ['1', '1', 'b', '1', ''], ['1', 'b', '1', '', 'g'], ['1', '1', '1', '', 'gb'], ['1', '1', '', '', '']] },
+  short: { n: 'Short week · Mon to Wed', sub: 'made by Marcus T.', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], grid: [['1', '1', 'b', '', ''], ['1', '1', '1', '', 'g'], ['1', '', '', '', ''], ['h', 'h', 'h', 'h', 'h'], ['h', 'h', 'h', 'h', 'h']] }
+};
+const WEEKS = [['Nov 9 to 13', 'std', ''], ['Nov 16 to 20', 'std', ''], ['Nov 23 to 27', 'short', 'Thanksgiving'], ['Jan 18 to 22, 2027', 'four', 'MLK Day · Mon'], ['Feb 15 to 19, 2027', 'four', 'Presidents Day · Mon']];
+const SLOT = (v, h, coach) => {
+  const t = HM(h);
+  if (v === 'h') return `<div class="slot off" style="font-size:9.5px">Holiday</div>`;
+  if (!v) return `<div class="slot off">${t}<br><span style="font-size:9px">${coach ? 'unavailable' : 'booked'}</span></div>`;
+  if (v === 'b') return `<div class="slot off">${t}<br><span style="font-size:9px">${coach ? 'Booked · 1:1' : 'booked'}</span></div>`;
+  const grp = v === 'g' || v === 'gb', left = v === 'gb' ? 3 : 6;
+  return `<div class="slot" style="${grp ? 'border-style:dashed;' : ''}"${!coach ? ` data-modal="${grp ? 'joinGroup' : 'booking'}"` : ''}>${t}<br><span style="font-size:9px">${grp ? (coach ? `Group · ${6 - left} of 6` : `Group · ${left} left`) : '1:1'}</span></div>`; };
+const AV_GRID = (tpl, coach, label) => { const T = AV_TPL[tpl];
+  return W(label, `<div class="row" style="margin-bottom:10px">${B('‹', { sm: 1 })}<b style="font-size:12px">${coach ? T.n : 'Nov 2 to 6'}</b>${B('›', { sm: 1 })}<span class="sp"></span>${C('1:1 call', 'd')}<span class="chip" style="border-style:dashed">Group call</span>${C('Unavailable / booked', 'g')}</div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px">${T.days.map((d, di) => `<div class="stack" style="gap:6px"><div style="font-family:var(--mono);font-size:10px;text-align:center">${coach ? d : d + ' ' + (di + 2)}</div>${HOURS.map((h, hi) => { const v = T.grid[di][hi];
+      return !coach && di === 1 && hi === 3 ? `<div class="slot pick" data-hl="slot" style="position:relative" data-modal="booking">${HM(h)}<br><span style="font-size:9px">1:1</span></div>` : SLOT(v, h, coach); }).join('')}</div>`).join('')}</div>${TZ_LINE()}`, { hl: coach ? 'av-grid' : '' }); };
+
+P.schedule = r => {
+  if (r === 'coach') { const T = AV_TPL[S.atpl];
+    return HDR('My Availability', 'Fellows book into the open 1:1 and group slots you set here.', TZ_PICK() + B('Sync Google / Outlook', { sm: 1 }) + B('Save availability', { p: 1, sm: 1 })) + `<div class="stack">
+      ${W('Recent changes from fellows', ITEM('Jordan A. rescheduled', `Tue Nov 3 · ${HM(16)} → Thu Nov 5 · ${HM(14)} · your calendar updated automatically`, C('New', 'd')) + ITEM('Riya M. cancelled', `Wed Nov 4 · ${HM(12)} · reason: class conflict · the slot is open again`, C('Seen')) + `<div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Changes go straight to your portal calendar and your synced Google or Outlook calendar. You also get an Inbox notice and an email.</div>`, { c: 'key', hl: 'resched-note' })}
+      ${W('Availability templates', `<div style="font-size:11px;color:var(--ink2);margin-bottom:8px">Set up the kinds of weeks you have during the year once, then apply one to each week.</div>
+        <div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(AV_TPL).map(([k, t]) => `<button class="chip${S.atpl === k ? ' d' : ''}" data-atpl="${k}" style="cursor:pointer">${t.n} <span style="opacity:.7;font-weight:400">· ${t.sub}</span></button>`).join('')}${B('+ New template', { sm: 1 })}</div>
+        <div class="goal-l" style="margin:12px 0 4px">Upcoming weeks</div>${WEEKS.map(([w, k, why]) => ITEM(w, `${AV_TPL[k].n}${why ? ' · ' + why : ''}${k === 'four' ? ' · suggested for holiday weeks' : ''}`, `<span class="row" style="gap:6px">${C(k === S.atpl ? 'Showing' : 'Applied', k === S.atpl ? 'd' : '')}${B('Change ▾', { sm: 1 })}</span>`)).join('')}<div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Weeks with no template use the Standard 5-day week. Editing a template never moves calls already booked.</div>`, { hl: 'av-templates' })}
+      <div class="split">${W(`Rules · ${T.n}`, `<div class="stack" style="gap:10px">
+          <div><div class="goal-l" style="margin-bottom:4px">Click slots to mark them as</div>${seg('stype', [['1', '1:1'], ['g', 'Group'], ['x', 'Unavailable']], S.stype)}</div>
+          ${F('1:1 call length', '45 min ▾')}${F('Buffer between calls', '15 min ▾')}
+          ${W('Group call rules', `<div class="stack" style="gap:8px">${F('Maximum participants', '6')}<div style="font-size:10.5px;color:var(--ink2)">Group calls are for 2 or more fellows. If only 1 fellow attends, it's still held and logged as a group call with 1 attendee. Group calls count toward each attendee's required monthly calls.</div>${F('Who can join', 'My fellows only ▾ / Any fellow in my program')}${F('Topic (shown to fellows)', 'Interview prep office hours')}${F('Sign-ups close', '2 hours before ▾')}</div>`, { c: 'key', hl: 'group-rules' })}</div>`)}
+        ${AV_GRID(S.atpl, 1, 'Template preview · click a slot to change it')}</div></div>`; }
+  if (r === 'pm') return HDR('Call Calendar', 'Read-only view of every coach call in the program, 1:1 and group.', TZ_PICK() + B('Coach ▾', { sm: 1 }) + B('1:1 + group ▾', { sm: 1 })) + AV_GRID('std', 0, 'Calendar: week of Nov 2 · Marcus T.');
+  return HDR('Schedule a Call', 'Your coach: Marcus T. · 2 calls required per month, 1:1 or group (2 booked for Nov)', TZ_PICK()) +
+    `<div class="split">
+      <div class="stack">
+        ${W('Coach card', `<div class="row"><span class="av">MT</span><div class="sp"><b>Marcus T.</b><div style="font-size:11px;color:var(--ink2)">Your pre-assigned coach · Eastern Time</div></div>${B('View profile', { sm: 1, go: 'coachinfo' })}</div>`)}
+        ${W('Upcoming calls', ITEM(`Thu Nov 5 · ${HM(14)}`, '1:1 · Zoom', `<span class="row" style="gap:6px">${B('Reschedule', { sm: 1, modal: 'reschedule', hl: 'resched-btn' })}${B('Cancel', { sm: 1, modal: 'cancelCall' })}</span>`) + ITEM(`Thu Nov 5 · ${HM(18)}`, 'Group · Interview prep office hours · 3 of 6 spots left', B('Leave', { sm: 1 })))}
+        ${W('Past calls', ITEM('Oct 27 · 1:1', 'Feedback due Nov 3', B('Leave feedback', { sm: 1, p: 1, modal: 'feedback', hl: 'feedback' })) + ITEM('Oct 13 · 1:1', 'Feedback sent ✓ · coach notes shared', B('View notes', { sm: 1 })))}
+      </div>
+      ${AV_GRID('std', 0, 'Calendar: week of Nov 2')}
+    </div>`; };
+
+const _booking27 = M.booking;
+M.booking = () => _booking27().replace('Tue Nov 3 · 4:00–4:45 PM', `Tue Nov 3 · ${HM(16)} to ${HM(16, 45)} · ${TZS[S.tz][1]}`).replace(`${F('Call type', '1:1 coach call ▾')}`, `${F('Call type', '1:1 coach call')}<div style="font-size:10.5px;color:var(--ink2)">🌐 ${TZS[S.tz][0]} · change it on the Schedule page</div>`);
+
+M.joinGroup = () => MH('Join a group call') + `<div class="stack" style="gap:10px">${W('Summary', `<b style="font-size:12.5px">Fri Nov 6 · ${HM(18)} to ${HM(19)} · ${TZS[S.tz][1]}</b><div style="font-size:11px;color:var(--ink2)">Interview prep office hours with Marcus T. · Zoom</div><div class="row" style="margin-top:8px;gap:6px">${C('3 of 6 spots left', 'd')}${C('Counts toward your required calls', 'd')}${C('Sign-ups close 2h before')}</div>`)}
+  ${F('A question you want covered (optional)', 'Shared with Marcus, not with other fellows…', 'area')}<div style="font-size:10.5px;color:var(--ink2)">Other fellows see your first name only. This call counts toward your 2 required calls this month.</div>
+  <div class="row"><span class="sp"></span>${B('Cancel', { sm: 1, close: 1 })}${B('Join', { p: 1, sm: 1, close: 1 })}</div></div>`;
+
+const AUTO_UPDATE = () => W('What happens next', ITEM('Marcus\'s calendar', 'Updates automatically: portal + synced Google or Outlook calendar', C('Auto')) + ITEM('Marcus gets a notification', 'Inbox notice + email, with your reason if you add one', C('Auto')) + ITEM('Your calendar', 'Invite updated with a new Zoom link', C('Auto')), { hl: 'resched-auto' });
+M.reschedule = () => MH('Reschedule your call') + `<div class="stack" style="gap:10px"><div style="font-size:12px">Current: <b>Thu Nov 5 · ${HM(14)}</b> with Marcus T.</div>
+  <div class="goal-l">Pick a new time · ${TZS[S.tz][0]}</div><div class="row" style="gap:6px;flex-wrap:wrap">${[['Fri Nov 6', 10], ['Mon Nov 9', 12], ['Tue Nov 10', 14]].map(([d, h], i) => `<div class="slot ${i === 0 ? 'pick' : ''}" style="padding:6px 10px">${d}<br>${HM(h)}</div>`).join('')}${B('See all open times', { sm: 1, close: 1 })}</div>
+  ${F('Reason (optional, shared with Marcus)', 'Class conflict ▾')}${AUTO_UPDATE()}
+  <div class="row"><span class="sp"></span>${B('Keep current time', { sm: 1, close: 1 })}${B('Confirm new time', { p: 1, sm: 1, close: 1 })}</div></div>`;
+M.cancelCall = () => MH('Cancel your call') + `<div class="stack" style="gap:10px"><div style="font-size:12px">Thu Nov 5 · ${HM(14)} with Marcus T. · 1:1</div>
+  ${F('Reason (shared with Marcus)', 'Pick a reason ▾')}${AUTO_UPDATE().replace('Invite updated with a new Zoom link', 'Invite removed').replace('Updates automatically: portal + synced Google or Outlook calendar', 'Updates automatically; the slot opens for other fellows')}
+  <div style="font-size:11px;padding:6px 8px;border:1px dashed var(--soft);border-radius:6px">Cancelling leaves 1 of your 2 required November calls booked (your group call counts). ${B('Book another time', { sm: 1, close: 1 })}</div>
+  <div class="row"><span class="sp"></span>${B('Keep my call', { sm: 1, close: 1 })}${B('Cancel call', { p: 1, sm: 1, close: 1 })}</div></div>`;
+
+// Coach notifications in the Inbox.
+INBOX.coach.unshift(['Calendar', 'Jordan A. rescheduled a call', `Tue Nov 3 4:00 PM → Thu Nov 5 2:00 PM · your calendar is updated`, 'TODAY', 1, 'View', { go: 'schedule' }]);
+
+ANNO.schedule.what = 'Booking calendar for coach calls. Coaches mark slots as 1:1 or group, set group rules (maximum participants and more), and build availability templates for different kinds of weeks. Everyone sets their own time zone right on the page, from a searchable list of every world time zone (it detects the browser\'s zone as a suggestion). Past calls collect fellow feedback.';
+Object.assign(ANNO.schedule.roles, {
+  coach: 'Sets availability with templates: a built-in Standard 5-day week and a 4-day week for Monday holidays, plus their own. Marks slots 1:1 or group; group rules cover maximum participants, who can join, topic, and sign-up cutoff. Group calls are for 2+ fellows; if only 1 attends, it is logged as a group call with 1 attendee. Cancellations and reschedules update the calendar automatically and send a notice.',
+  fellow: 'Books 1:1 slots or joins group calls with their coach. Both count toward the monthly call minimum. Can reschedule or cancel; the coach\'s calendar updates automatically and the coach is notified. Sets their time zone on the page.',
+  pm: 'Read-only calendar of all 1:1 and group calls, in the PM\'s own time zone. Call compliance counts group calls toward each attendee\'s minimum.' });
+PERMS.schedule.coach = ['E', 'availability, templates, group rules'];
+PERMS.schedule.fellow = ['E', 'book, join, reschedule, cancel'];
+DATA_PERMS.push(
+  { name: 'Time zone', sub: 'searchable list of all world time zones · set on scheduling pages · saved to profile', p: 'schedule', v: { admin: ['E', 'own'], pm: ['E', 'own'], coach: ['E', 'own'], fellow: ['E', 'own'], company: ['E', 'own'], prospect: ['E', 'own'] } },
+  { name: 'Availability templates', sub: 'built-in 5-day + 4-day, plus custom', p: 'schedule', v: { admin: ['N'], pm: ['V'], coach: ['E', 'own'], fellow: ['N'], company: ['N'], prospect: ['N'] } },
+  { name: 'Group call rules', sub: 'max participants, who can join · counts toward call minimums', p: 'schedule', v: { admin: ['N'], pm: ['V'], coach: ['E', 'own calls'], fellow: ['V', 'spots left'], company: ['N'], prospect: ['N'] } }
+);
+FLOWS.push({ id: 'avail', title: 'Coach sets availability with templates', roles: ['coach'], steps: [
+  { r: 'coach', p: 'schedule', set: { atpl: 'std' }, hl: 'av-templates', t: 'Marcus applies a template to each upcoming week. Holiday weeks get the 4-day template.' },
+  { r: 'coach', p: 'schedule', set: { atpl: 'four' }, hl: 'av-grid', t: 'The 4-day template blocks Monday and keeps Tuesday to Friday open.' },
+  { r: 'coach', p: 'schedule', set: { atpl: 'four', stype: 'g' }, hl: 'group-rules', t: 'Marcus marks Thursday evening as a group call, with a maximum of 6 fellows.' }
+]});
+FLOWS.push({ id: 'resched', title: 'Fellow reschedules; coach is notified', roles: ['fellow', 'coach'], steps: [
+  { r: 'fellow', p: 'schedule', set: { tz: 'America/Chicago' }, hl: 'tz-pick', t: 'Jordan is traveling and picks Central Time from the searchable time zone list. Every time on the page updates.' },
+  { r: 'fellow', p: 'schedule', m: 'tzPick', hl: 'tz-list', t: 'The list is searchable by city, country, or zone, and shows what each call time would be.' },
+  { r: 'fellow', p: 'schedule', hl: 'resched-btn', t: 'Jordan clicks Reschedule on the upcoming call.' },
+  { r: 'fellow', p: 'schedule', m: 'reschedule', hl: 'resched-auto', t: 'Jordan picks a new time. Marcus\'s calendar will update on its own.' },
+  { r: 'coach', p: 'schedule', set: { tz: 'America/New_York' }, hl: 'resched-note', t: 'Marcus sees the change on the calendar and gets an Inbox notice and an email.' }
+]});
+
+// Coach dashboard: the Calls KPI is two stacked bars (completed vs scheduled); today's count lives in Today's calls.
+ANNO.dashboard.roles.coach = (ANNO.dashboard.roles.coach || '') + ' The Calls tile has two stacked bars, this week and this month, each split into Completed (the call happened) and Scheduled (still on the calendar). Cancelled calls and no-shows are left out. Today\'s count, split into 1:1 and group calls, is at the top of Today\'s calls.';
+</script>
+<script>/* pages28.js */
+// v0.2.1 · Experiment: Org Rep admins connect their company's ATS (Workday, Lever, Greenhouse) and import specific postings.
+// Imported postings go through the same PM approval. Fellows apply in the portal (eligibility check runs), then the application
+// is sent to the company's ATS. Closing dates sync on their own; big edits go back to the PM. Status updates flow back into outcomes.
+const ATS_LIST = [['Workday', 'Connected', 'Connected Oct 12 by Kim L. · last sync 9 min ago'], ['Greenhouse', '', 'Not connected'], ['Lever', '', 'Not connected']];
+const ATS_JOBS = [
+  ['Summer Analyst Intern · 2027', 'REQ-4471 · New York · posted in Workday Oct 30', 1, 'Imported · live'],
+  ['Investment Banking Analyst · 2027', 'REQ-4502 · New York · posted Nov 2', 1, 'Selected'],
+  ['Sales & Trading Summer Intern', 'REQ-4519 · Chicago · posted Nov 3', 0, ''],
+  ['Risk Analyst, full-time', 'REQ-4388 · Charlotte · posted Oct 18', 0, ''],
+  ['Executive Assistant', 'REQ-4520 · New York · posted Nov 4', 0, 'Not a fit for MLT? Leave it out']
+];
+const ATS_BADGE = n => `<span class="chip" style="font-size:9.5px" title="Imported from ${n}">⇄ ${n}</span>`;
+
+// Company admin: connect on My Account & Postings. Other reps see the connection but can't change it.
+const ATS_PANEL = () => { const admin = S.crep === 'main';
+  return W('Applicant tracking system (ATS)', `<div style="font-size:11px;color:var(--ink2);margin-bottom:8px">${admin ? 'Connect your ATS to import specific postings instead of retyping them.' : 'Your company admin manages this connection. You can import postings from it.'} Only the postings you pick are imported.</div>
+    ${ATS_LIST.map(([n, st, sub]) => ITEM(n, sub, st ? `<span class="row" style="gap:6px">${C('✓ ' + st, 'd')}${admin ? B('Settings', { sm: 1, modal: 'atsConnect' }) : ''}</span>` : admin ? B('Connect', { sm: 1, modal: 'atsConnect' }) : C('Not connected', 'g'))).join('')}
+    <div style="margin-top:8px">${B('⇄ Import postings from Workday', { sm: 1, p: 1, modal: 'atsImport', hl: 'ats-import-btn' })}</div>`, { c: 'key', hl: 'ats-panel' }); };
+
+M.atsConnect = () => MH('Connect Workday') + `<div class="stack" style="gap:12px"><div style="font-size:12px;color:var(--ink2)">Only your company admin can connect or disconnect. Sign in with a Workday account that can read job requisitions and add candidates.</div>
+  ${B('Sign in with Workday', { p: 1, sm: 1 })}
+  ${W('What MLT can do', ITEM('Read job postings', 'Only the ones you choose to import', C('Needed', 'd')) + ITEM('Add candidates', 'Sends fellows\' applications to the matching requisition', C('Needed', 'd')) + ITEM('Read application status', 'Interview, offer, or rejected · feeds outcomes for coaches', C('Needed', 'd')) + ITEM('Anything else in your ATS', 'Other candidates, notes, and pay data are never read', C('Never')))}
+  ${W('Sync settings', `<div class="stack" style="gap:8px">${F('Closing dates + closed postings', 'Update automatically')}${F('Title, description, or eligibility changes', 'Send back to the MLT Program Manager for review')}${F('Status updates from Workday', 'Every 15 minutes ▾')}</div>`)}
+  <div style="font-size:10.5px;color:var(--ink2)">An MLT Admin can see that the connection exists and pause it, but can't sign in to your ATS.</div>
+  <div class="row"><span class="sp"></span>${B('Cancel', { sm: 1, close: 1 })}${B('Save', { sm: 1, p: 1, close: 1 })}</div></div>`;
+
+M.atsImport = () => MH('Import postings from Workday') + `<div class="stack" style="gap:12px">
+  <div class="row">${I('⌕ Search requisitions…').replace('class="inp ', 'class="inp sp ')}${B('Open requisitions ▾', { sm: 1 })}</div>
+  <div data-hl="ats-pick">${ATS_JOBS.map(([n, sub, on, st]) => `<div class="item"><span class="chk ${on ? 'x' : ''}"></span><div class="t"><b>${n}</b><span>${sub}</span></div>${st ? C(st, st.startsWith('Imported') ? 'd' : st === 'Selected' ? '' : 'g') : ''}</div>`).join('')}</div>
+  ${W('Before it goes to the Program Manager', `<div style="font-size:11px;color:var(--ink2);margin-bottom:6px">Title, location, description, and closing date come from Workday. MLT-only fields are added here.</div><div class="g2" style="gap:10px">${F('Eligibility', 'Acme defaults · AI resume score 60+, grad Dec 2027 to Jun 2029 ▾')}${F('Who sees it', 'Career Prep · Finance track ▾')}${F('Apply method', 'Apply in portal · sent to Workday')}${F('Closing date', 'From Workday · Dec 1')}</div>`, { hl: 'ats-mlt-fields' })}
+  <div class="row"><span style="font-size:11px" class="sp">1 posting selected · goes to the PM approval queue</span>${B('Cancel', { sm: 1, close: 1 })}${B('Import + send for approval', { sm: 1, p: 1, close: 1 })}</div></div>`;
+
+
+// My Account & Postings: an Import button, the ATS panel above the team list, and an ATS tag on imported postings.
+const _accounts28 = P.accounts;
+P.accounts = r => { let html = _accounts28(r); if (r !== 'company' || S.crep === 'mba') return html;
+  html = html.replace(B('+ Post a job', { p: 1, modal: 'postJob', hl: 'post-job' }), B('⇄ Import from ATS', { modal: 'atsImport' }) + B('+ Post a job', { p: 1, modal: 'postJob', hl: 'post-job' }));
+  html = html.replace('<td>Summer Analyst Intern</td>', `<td>Summer Analyst Intern ${ATS_BADGE('Workday')}</td>`).replace('<td>Data Intern</td>', `<td>Investment Banking Analyst · 2027 ${ATS_BADGE('Workday')}</td>`);
+  const at = html.indexOf('<div class="wf " data-l="Team (company reps)"'); return at < 0 ? html : html.slice(0, at) + ATS_PANEL() + html.slice(at); };
+
+// PM approval queue: imported postings, plus a big edit that came back from Workday.
+const _approvals28 = P.approvals;
+P.approvals = r => _approvals28(r).replace('Submitted by ', `${ATS_BADGE('Workday')} Imported from Workday (REQ-4471) by `).replace(C('Job postings 3'), C('Job postings 4')).replace(C('All 7', 'd'), C('All 8', 'd')).replace('<div class="stack">', `<div class="stack">${W('Request card · Changed in Workday', `<div class="row"><div class="sp"><b>Ops Analyst</b> · Acme Corp ${ATS_BADGE('Workday')}<div style="font-size:11px;color:var(--ink2)">Live posting · description and minimum GPA changed in Workday 2h ago. Fellows still see the approved version until you review.</div></div>${C('Big edit')}</div><div style="font-size:11.5px;margin-top:8px;padding:6px 8px;border:1px dashed var(--soft);border-radius:6px"><b>Changed:</b> minimum GPA 3.3 → 3.5 · 2 new required skills (SQL, Tableau) · closing date Dec 12 → Dec 5 (already updated on its own)</div><div class="row" style="margin-top:10px">${B('Approve changes', { p: 1, sm: 1 })}${B('Keep the old version', { sm: 1 })}${B('Ask Acme', { sm: 1 })}</div>`, { c: 'key', hl: 'ats-bigedit' })}`);
+
+// Rep's applicant view and outcomes: status flows back from Workday.
+RES_OUT.forEach(o => { if (/^Acme/.test(o[1])) o[3] += ' · from Workday'; });
+const _jobDetail28 = M.jobDetail;
+M.jobDetail = () => _jobDetail28().replace(/Submit application/, 'Submit application · sent to Acme\'s Workday');
+
+PERMS.accounts.company = [PERMS.accounts.company[0], (PERMS.accounts.company[1] ? PERMS.accounts.company[1] + ' · ' : '') + 'ATS: admin connects, reps import'];
+DATA_PERMS.push(
+  { name: 'ATS connection (Workday, Lever, Greenhouse)', sub: 'company admin only · read postings, add candidates, read status', p: 'accounts', v: { admin: ['V', 'can pause'], pm: ['V'], coach: ['N'], fellow: ['N'], company: ['E', 'admin connects; reps import'], prospect: ['N'] } },
+  { name: 'Imported postings', sub: 'same PM approval as manual postings', p: 'approvals', v: { admin: ['E'], pm: ['E', 'approves imports + big edits'], coach: ['V'], fellow: ['V', 'once approved'], company: ['E', 'imports'], prospect: ['N'] } },
+  { name: 'Application status from ATS', sub: 'interview, offer, rejected', p: 'fellows', v: { admin: ['V'], pm: ['V'], coach: ['V', 'own fellows · outcomes'], fellow: ['V', 'own'], company: ['V', 'own postings'], prospect: ['N'] } }
+);
+ANNO.accounts.roles.company = (ANNO.accounts.roles.company || '') + ' Experiment: the company admin can connect the company ATS (Workday, Lever, or Greenhouse). Reps pick specific postings to import; MLT-only fields like eligibility are added before the posting goes to PM approval, the same as a manual posting.';
+ANNO.approvals.what += ' Postings imported from an ATS are marked with the ATS name. When a live imported posting changes in the ATS, closing dates update on their own, but changes to the title, description, or eligibility come back here for review; fellows keep seeing the approved version meanwhile.';
+FLOWS.push({ id: 'ats', title: 'Org Rep imports a posting from Workday', roles: ['company', 'pm', 'fellow'], steps: [
+  { r: 'company', p: 'accounts', set: { crep: 'main' }, hl: 'ats-panel', t: 'Kim, Acme\'s company admin, has connected Workday.' },
+  { r: 'company', p: 'accounts', set: { crep: 'main' }, m: 'atsImport', hl: 'ats-pick', t: 'Kim picks one requisition to import. Only chosen postings come over.' },
+  { r: 'company', p: 'accounts', set: { crep: 'main' }, m: 'atsImport', hl: 'ats-mlt-fields', t: 'Kim adds the MLT-only fields: eligibility and which programs see it.' },
+  { r: 'pm', p: 'approvals', hl: 'approve-job', t: 'Priya approves it like any other posting. It shows it came from Workday.' },
+  { r: 'pm', p: 'approvals', hl: 'ats-bigedit', t: 'Later, Acme changes a live posting in Workday. The new closing date updates on its own; the GPA and skills change waits for Priya.' },
+  { r: 'fellow', p: 'jobs', t: 'Jordan applies in the portal. The application goes to Acme\'s Workday, and status updates come back to Jordan\'s outcomes.' }
+]});
+</script>
+<script>/* pages29.js */
+// v0.2.1 · Import a posting from a PDF: the rep uploads the job description and pastes the requisition or career-site link.
+// The AI fills in the posting from the PDF; the rep checks it, eligibility starts from the company defaults, and it goes to PM approval.
+M.pdfImport = () => MH('Import a posting from a PDF') + `<div class="stack" style="gap:12px">
+  <div style="font-size:12px;color:var(--ink2)">Two things needed: the job description as a PDF, and a link to the job requisition or your career site. We fill in the rest for you to check.</div>
+  <div class="g2" style="gap:10px;align-items:start">
+    <div class="fld"><label>1 · Job description (PDF)</label><div class="img" style="height:70px" data-hl="pdf-drop">✓ acme_summer_analyst_2027.pdf · 2 pages<br><span style="font-size:10px">Drop a PDF or browse · replace</span></div></div>
+    ${F('2 · Link to the requisition or career site', 'https://careers.acme.com/jobs/REQ-4471').replace('<div class="fld">', '<div class="fld" data-hl="pdf-link">')}</div>
+  ${W('Filled in from the PDF · please check', `<div class="g2" style="gap:10px">${F('Job title', 'Summer Analyst Intern · 2027')}${F('Type', 'Internship ▾')}${F('Location', 'New York, NY · hybrid')}${F('Closing date', 'Dec 1, 2026 · found on page 2')}${F('Pay (if listed)', '$45/hour')}${F('Required skills', 'Excel · financial modeling · presentations')}</div><div style="margin-top:8px">${F('Description', 'Pulled from the PDF · 410 words · edit if needed', 'area')}</div><div style="font-size:10.5px;color:var(--ink2);margin-top:6px">⚠ No graduation date found in the PDF. Your company default (Dec 2027 to Jun 2029) will be used.</div>`, { c: 'dash', hl: 'pdf-fields' })}
+  ${W('MLT-only fields', `<div class="g2" style="gap:10px">${F('Eligibility', 'Acme defaults · AI resume score 60+, grad Dec 2027 to Jun 2029 ▾')}${F('Who sees it', 'Career Prep · Finance track ▾')}${F('Apply method', 'Apply in portal, then continue on your career site')}</div><div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Fellows pass the eligibility check in the portal first, then finish on the link you gave. The portal still tracks who applied.</div>`)}
+  <div class="row"><span style="font-size:11px" class="sp">Goes to the MLT Program Manager for approval, like any posting.</span>${B('Cancel', { sm: 1, close: 1 })}${B('Send for approval', { sm: 1, p: 1, close: 1 })}</div></div>`;
+
+const PDF_BADGE = `<span class="chip" style="font-size:9.5px" title="Imported from a PDF">⤓ PDF</span>`;
+const _accounts29 = P.accounts;
+P.accounts = r => { const html = _accounts29(r); if (r !== 'company' || S.crep === 'mba') return html;
+  return html.replace(B('⇄ Import from ATS', { modal: 'atsImport' }), B('⤓ Import from PDF', { modal: 'pdfImport', hl: 'pdf-btn' }) + B('⇄ Import from ATS', { modal: 'atsImport' })); };
+const _approvals29 = P.approvals;
+P.approvals = r => _approvals29(r).replace('<div class="stack">', `<div class="stack">${W('Request card · Imported from a PDF', `<div class="row"><div class="sp"><b>Risk Analyst, full-time</b> · Acme Corp ${PDF_BADGE}<div style="font-size:11px;color:var(--ink2)">Submitted by Ravi S. · fields filled in from risk_analyst_jd.pdf and checked by the rep</div></div>${B('Open PDF', { sm: 1 })}${B('Open link ↗', { sm: 1 })}</div><div class="row" style="margin-top:10px">${B('Approve', { p: 1, sm: 1 })}${B('Request changes', { sm: 1 })}</div>`, { hl: 'pdf-approve' })}`);
+
+DATA_PERMS.push({ name: 'Import a posting from a PDF', sub: 'PDF + requisition or career-site link · AI fills the fields', p: 'accounts', v: { admin: ['V'], pm: ['E', 'approves'], coach: ['N'], fellow: ['V', 'once approved'], company: ['E', 'any rep'], prospect: ['N'] } });
+ANNO.accounts.roles.company += ' Reps can also import a posting from a PDF: upload the job description and add the requisition or career-site link. The AI fills in the posting for the rep to check, and it goes to PM approval.';
+FLOWS.push({ id: 'pdfimport', title: 'Org Rep imports a posting from a PDF', roles: ['company', 'pm'], steps: [
+  { r: 'company', p: 'accounts', set: { crep: 'rep' }, hl: 'pdf-btn', t: 'Ravi, an Acme rep, clicks Import from PDF.' },
+  { r: 'company', p: 'accounts', set: { crep: 'rep' }, m: 'pdfImport', hl: 'pdf-drop', t: 'Ravi uploads the job description PDF and pastes the career-site link.' },
+  { r: 'company', p: 'accounts', set: { crep: 'rep' }, m: 'pdfImport', hl: 'pdf-fields', t: 'The fields are filled in from the PDF. Ravi checks them; a missing graduation date falls back to Acme\'s default.' },
+  { r: 'pm', p: 'approvals', hl: 'pdf-approve', t: 'Priya reviews it with the PDF and link side by side, then approves.' }
+]});
+</script>
+<script>/* pages30.js */
+// v0.2.1 · MBA Admissions Officer · L3 Premier: compare your school with similarly ranked schools on MLT fellows'
+// applications, offers (admits), and commits. Peers are anonymized: only the peer-group median and range are shown, never a school's name.
+const PEER = { label: 'Similarly ranked schools · 8 schools ranked #8 to #15', min: 5 };
+const BENCH = {
+  cycle: { lab: '2025–26 cycle', you: [212, 58, 31], med: [176, 49, 22], lo: [120, 31, 14], hi: [248, 71, 34] },
+  r1: { lab: 'Round 1 · 2025–26', you: [126, 39, 22], med: [98, 30, 14], lo: [70, 18, 8], hi: [140, 44, 23] },
+  r2: { lab: 'Round 2 · 2025–26', you: [86, 19, 9], med: [78, 19, 8], lo: [50, 13, 6], hi: [108, 27, 11] }
+};
+const BENCH_ROWS = [['Applications', 'MLT fellows who applied'], ['Offers', 'Admits'], ['Commits', 'Deposits / enrolled']];
+const bpct = (a, b) => Math.round(a / b * 100);
+const BENCH_BAR = (lab, sub, you, med, lo, hi, max) => `<div style="margin:10px 0"><div class="row" style="font-size:11.5px"><b class="sp">${lab} <span style="font-weight:400;color:var(--ink2);font-size:10.5px">· ${sub}</span></b><span style="font-size:11px">${you >= med ? '▲' : '▼'} ${Math.abs(bpct(you - med, med))}% vs peer median</span></div>
+  <div style="position:relative;height:30px;margin-top:4px">
+    <div style="position:absolute;top:0;left:0;height:12px;width:${bpct(you, max)}%;background:var(--ink);border-radius:2px"></div><span style="position:absolute;top:-1px;left:calc(${bpct(you, max)}% + 6px);font-size:10.5px;font-weight:700">${you} Ross</span>
+    <div style="position:absolute;top:16px;left:${bpct(lo, max)}%;width:${bpct(hi - lo, max)}%;height:12px;background:repeating-linear-gradient(45deg,var(--fill) 0 3px,var(--soft) 3px 5px);border:1px solid var(--soft);border-radius:2px" title="Peer range ${lo} to ${hi}"></div>
+    <div style="position:absolute;top:14px;left:${bpct(med, max)}%;width:2px;height:16px;background:var(--ink)"></div><span style="position:absolute;top:15px;left:calc(${bpct(hi, max)}% + 6px);font-size:10.5px;color:var(--ink2)">median ${med} · range ${lo} to ${hi}</span>
+  </div></div>`;
+
+const BENCH_PANEL = () => { const b = BENCH[S.bench], max = Math.max(...b.hi, ...b.you) * 1.25;
+  const rate = (l, y, m) => `<div class="kpi" style="flex:1;text-align:center"><b>${y}%</b><span>${l}</span><div style="font-size:10px;color:var(--ink2)">peers ${m}%</div></div>`;
+  return W('Compared with similar schools · L3 Premier', `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">${seg('bench', Object.entries(BENCH).map(([k, v]) => [k, v.lab]), S.bench)}<span class="sp"></span>${B('Peer group ▾', { sm: 1, modal: 'peerGroup' })}${B('Export', { sm: 1 })}</div>
+    <div style="font-size:10.5px;color:var(--ink2)">${PEER.label} · MLT MBA Prep + MBA PD fellows only</div>
+    <div class="row" style="gap:12px;font-size:10px;margin-top:8px"><span class="row" style="gap:4px"><i style="width:10px;height:10px;background:var(--ink);display:inline-block"></i>Ross</span><span class="row" style="gap:4px"><i style="width:10px;height:10px;border:1px solid var(--soft);background:repeating-linear-gradient(45deg,var(--fill) 0 2px,var(--soft) 2px 3px);display:inline-block"></i>Peer range (lowest to highest)</span><span class="row" style="gap:4px"><i style="width:2px;height:10px;background:var(--ink);display:inline-block"></i>Peer median</span></div>
+    <div data-hl="bench-bars">${BENCH_ROWS.map(([l, s], i) => BENCH_BAR(l, s, b.you[i], b.med[i], b.lo[i], b.hi[i], max)).join('')}</div>
+    <div class="row" style="gap:0;border-top:1px dashed var(--soft);padding-top:10px;margin-top:4px">${rate('Offer rate · offers ÷ applications', bpct(b.you[1], b.you[0]), bpct(b.med[1], b.med[0]))}${rate('Yield · commits ÷ offers', bpct(b.you[2], b.you[1]), bpct(b.med[2], b.med[1]))}${rate('Commits ÷ applications', bpct(b.you[2], b.you[0]), bpct(b.med[2], b.med[0]))}</div>
+    <div style="font-size:11.5px;line-height:1.5;margin-top:10px;padding:8px;border:1px dashed var(--soft);border-radius:6px" data-hl="bench-insight"><b>What stands out:</b> Ross gets more MLT applications than most peers, and yield is ${bpct(b.you[2], b.you[1]) >= bpct(b.med[2], b.med[1]) ? 'above' : 'below'} the peer median. ${S.bench === 'r2' ? 'Round 2 is close to the peer median on every measure.' : 'Round 1 drives most of the lead.'}</div>
+    <div style="font-size:10.5px;color:var(--ink2);margin-top:8px">🔒 Other schools are never named. A peer group needs at least ${PEER.min} schools, and numbers come from what fellows report in the portal (applications, admits, deposits).</div>`, { c: 'key', hl: 'bench-panel' }); };
+
+const BENCH_LOCKED = () => W('Compared with similar schools', `<div class="row" style="align-items:flex-start"><span style="font-size:20px">🔒</span><div class="sp" style="font-size:12px">See how Ross compares with similarly ranked schools on MLT fellows' applications, offers, and commits. <b>Available with L3 Premier.</b><div style="margin-top:8px">${B('Talk to MLT about Premier', { sm: 1 })}</div></div></div>`, { c: 'dash', hl: 'bench-locked' });
+
+M.peerGroup = () => MH('Peer group') + `<div class="stack" style="gap:10px"><div style="font-size:12px;color:var(--ink2)">MLT sets the peer group from public rankings so schools can't pick a group that makes them look good. Schools in it are not shown to you.</div>
+  ${ITEM('Similarly ranked schools', '8 schools ranked #8 to #15 · default', C('Current', 'd'))}${ITEM('Same region · Midwest', '6 schools', C('Available'))}${ITEM('All MLT partner schools', '50 schools', C('Available'))}
+  <div class="row"><span class="sp"></span>${B('Close', { sm: 1, close: 1 })}</div></div>`;
+
+const _dash30 = P.dashboard;
+P.dashboard = r => { const html = _dash30(r); if (r !== 'company' || S.crep !== 'mba') return html;
+  const at = html.indexOf('<div class="wf " data-l="Shortcuts"'); const panel = S.tier === 3 ? BENCH_PANEL() : BENCH_LOCKED();
+  return at < 0 ? html : html.slice(0, at) + panel + html.slice(at); };
+
+DATA_PERMS.push({ name: 'Peer school benchmark (MBA)', sub: 'applications, offers, commits vs similarly ranked schools · anonymized', p: 'dashboard', v: { admin: ['V', 'all schools, named'], pm: ['V', 'all schools, named'], coach: ['N'], fellow: ['N'], company: ['V', 'MBA officer · L3 Premier only · peers anonymized'], prospect: ['N'] } });
+ANNO.dashboard.roles.company = (ANNO.dashboard.roles.company || '') + ' MBA Admissions Officers at L3 Premier see how their school compares with similarly ranked schools on MLT fellows\' applications, offers, and commits, by cycle or round. Peers are shown only as a median and range, never by name, and a peer group needs at least 5 schools. L1 and L2 see a locked preview.';
+FLOWS.push({ id: 'mbabench', title: 'MBA officer compares Ross with peer schools', roles: ['company'], steps: [
+  { r: 'company', p: 'dashboard', set: { crep: 'mba', tier: 1 }, hl: 'bench-locked', t: 'At L1, Lena sees a locked preview of the peer comparison.' },
+  { r: 'company', p: 'dashboard', set: { crep: 'mba', tier: 3, bench: 'cycle' }, hl: 'bench-bars', t: 'At L3 Premier, Lena sees Ross against the peer median and range for applications, offers, and commits.' },
+  { r: 'company', p: 'dashboard', set: { crep: 'mba', tier: 3, bench: 'r2' }, hl: 'bench-insight', t: 'Switching to Round 2 shows Ross is close to its peers there; Round 1 drives the lead.' }
+]});
+
+// v0.2.1 · Pathways: Career Prep alumni can apply to Future MBA as well as MBA Prep and MBA PD. Shown on the alum dashboard.
+const FMBA = PROGRAMS.findIndex(p => p.n === 'Future MBA'), MPREP = PROGRAMS.findIndex(p => p.n === 'MBA Prep');
+const APPLY_BTN = i => B('Apply', { sm: 1, p: 1, go: 'apply' }).replace('<button', `<button data-prog="${i}"`);
+const NEXT_PROGS = () => W('Suggested next programs · for Career Prep alumni', ITEM('Future MBA', `Finish the GMAT or GRE, then get into MBA Prep · rolling deadlines · ${FELLOW_FEE(PROGRAMS[FMBA].app)} application fee (20% off)`, APPLY_BTN(FMBA), { hl: 'next-fmba' }) + ITEM('MBA Prep', `Get accepted to an MBA program · apply by ${PROGRAMS[MPREP].dl} · ${FELLOW_FEE(PROGRAMS[MPREP].app)} application fee`, APPLY_BTN(MPREP)) + `<div style="font-size:10.5px;color:var(--ink2);margin-top:6px">Not ready for MBA Prep yet? Future MBA gets you there. You can apply to any program.</div>`, { c: 'key' });
+const _dash30b = P.dashboard;
+P.dashboard = r => { const html = _dash30b(r); if (r !== 'fellow' || S.fj !== 'alum') return html;
+  return html.replace('<div class="stack">', '<div class="stack">' + NEXT_PROGS()); };
+ANNO.programs.roles.fellow = 'Fellows and alumni can apply to any program for now. Pathways shown as suggestions: Career Prep alumni can apply to Future MBA, MBA Prep, and MBA PD.';
+FLOWS.push({ id: 'fmba', title: 'A Career Prep alum applies to Future MBA', roles: ['fellow'], steps: [
+  { r: 'fellow', p: 'dashboard', set: { fj: 'alum', fas: 'pre' }, hl: 'next-fmba', t: 'Jordan, a Career Prep alum, sees Future MBA suggested on the dashboard.' },
+  { r: 'fellow', p: 'apply', set: { fj: 'alum', fas: 'applying', fprog: FMBA }, hl: 'prefill', t: 'Jordan applies. Contact info, work experience, and academic history are prefilled, and the fee is $40 with the fellow discount.' }
+]});
+</script>
 <script>/* app.js */
 // App shell: state, prototype frame, sitemap, permissions matrix, flows.
-const S = { view: 'proto', role: 'fellow', page: 'dashboard', mobile: false, modal: null, flow: null, step: 0, tier: 3, cohort: 'all', aud: 'fellows', aq: 0, ciSel: 0, ev: 0, svType: 'pre', svAud: 'fellow', pstage: 'pre', admTab: 'pipeline', prog: 1, ibx: 'all', ws: 'admissions', dctab: 'accept', cyc: '1', plv: 'ug', crep: 'main', coSel: 0, bsSel: 0, fsel: 'Jordan A.', call: 0, fq: 1, zup: 'paste', libopen: 'resume,brag,interview', tone: 'pro', msq: 'people', rs: 71, jres: 2, rsel: 0, rfil: 'all', bbx: 0, bbtab: 'brags', bstart: 'scratch', jm: 0, libf: 'all', dual: 0, fj: 'current', fas: 'pre', fprog: 2, links: 1, yrsShow: 1, rf: { needs: 0, flagged: 0, exit: 0, cls: 'all', timing: 'all', ready: 'all', eng: 'all' } };
+const S = { view: 'proto', role: 'fellow', page: 'dashboard', mobile: false, modal: null, flow: null, step: 0, tier: 3, cohort: 'all', aud: 'fellows', aq: 0, ciSel: 0, ev: 0, svType: 'pre', svAud: 'fellow', pstage: 'pre', admTab: 'pipeline', prog: 1, ibx: 'all', ws: 'admissions', dctab: 'accept', cyc: '1', plv: 'ug', crep: 'main', coSel: 0, bsSel: 0, fsel: 'Jordan A.', call: 0, fq: 1, zup: 'paste', libopen: 'resume,brag,interview', tone: 'pro', msq: 'people', atpl: 'std', stype: '1', tz: 'America/New_York', bench: 'cycle', rs: 71, jres: 2, rsel: 0, rfil: 'all', bbx: 0, bbtab: 'brags', bstart: 'scratch', jm: 0, libf: 'all', dual: 0, fj: 'current', fas: 'pre', fprog: 2, links: 1, yrsShow: 1, rf: { needs: 0, flagged: 0, exit: 0, cls: 'all', timing: 'all', ready: 'all', eng: 'all' } };
 const RA = { admin: 'A', pm: 'PM', coach: 'C', fellow: 'F', company: 'CR', prospect: 'P' };
 const $ = s => document.querySelector(s);
 const seg = (attr, items, cur) => `<div class="seg">${items.map(([k, l]) => `<button data-${attr}="${k}" class="${k === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 
 function renderTop() {
-  $('#top').innerHTML = `<div class="brand"><b>MLT Fellow Portal</b><span>Low-fidelity wireframe · v0.2 · Nov 3, 2026</span></div>
+  $('#top').innerHTML = `<div class="brand"><b>MLT Fellow Portal</b><span>Low-fidelity wireframe · v0.2.1 · Nov 9, 2026</span></div>
     <div class="ctl"><label>View</label>${seg('view', [['proto', 'Prototype'], ['map', 'Sitemap'], ['perms', 'Permissions'], ['flows', 'Key flows']], S.view)}</div>
     ${ACCESS_SEG()}
     ${S.role === 'fellow' && S.view === 'proto' ? FELLOW_CTLS() : ''}
@@ -2850,13 +3209,13 @@ function highlight() {
 // ---------- sitemap ----------
 const SUBS = {
   users: ['Invite user (modal)', 'Edit user / change role'],
-  approvals: ['Job posting review', 'Coach reassignment', 'Sign-up approval'],
+  approvals: ['Job posting review', 'Imported posting · big edit from ATS', 'Imported from PDF', 'Coach reassignment', 'Sign-up approval'],
   program: ['Program setup form', 'Coach compliance', 'Fellow compliance', 'Milestones'],
   fellows: ['Fellow search', 'Profile header + AI summary', 'Coach call records (notes + AI summary per call)', 'Assign task (modal)'],
-  schedule: ['Book call (modal)', 'Leave feedback (modal)', 'Coach availability'],
+  schedule: ['Book call (modal)', 'Join group call (modal)', 'Reschedule + cancel (modals)', 'Leave feedback (modal)', 'Coach availability · 1:1 + group', 'Availability templates', 'Time zone picker · searchable list (modal)'],
   modules: ['Lesson player', 'Assignment submit', 'Quiz'],
   jobs: ['Job detail & apply (modal)', 'Saved / My applications'],
-  accounts: ['Account detail + relationship log', 'Post a job (modal)', 'Applicants'],
+  accounts: ['Account detail + relationship log', 'Post a job (modal)', 'Applicants', 'ATS connection (company admin)', 'Import postings from ATS (modal)', 'Import from PDF (modal)'],
   messages: ['Conversation', 'Search · People or Keywords', 'Keyword results · jump to match'],
   assistant: ['Chat + suggested prompts', 'Answer actions (draft, nudge, open)', 'Data scope panel', 'Conversation mode · Professional / Casual'],
   coachinfo: ['Coach directory (fellow, PM)', 'Coach edits via About Me'],
@@ -2886,7 +3245,7 @@ const SUBS = {
   nudge: ['Audience tabs (PM)', 'Bulk nudge + template'],
   exits: ['Process withdrawal (modal)', 'Issue infraction (modal)', 'Dismiss fellow (modal)', 'Dismissal rules'],
   status: ['Infraction history', 'Upcoming timeline'],
-  coachstats: ['Feedback time series', 'Per-question averages'],
+  coachstats: ['Feedback time series', 'Per-question averages', 'AI feedback summary · went well / could be better', 'Fellow insights · interview, resume, portal use'],
   settings: ['Profile', 'Notifications', 'Integrations (Admin)']
 };
 const rd = p => `<div class="rd">${ROLE_KEYS.filter(k => p === 'login' || canSee(p, k)).map(k => `<i style="${PERMS[p][k][0] === 'E' ? 'background:var(--ink);color:var(--sheet)' : ''}">${RA[k]}</i>`).join('')}</div>`;
@@ -2951,7 +3310,7 @@ function applyStep() {
 }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-view],[data-role],[data-tier],[data-cohort],[data-aud],[data-aq],[data-ci],[data-ev],[data-svtype],[data-svaud],[data-pstage],[data-admtab],[data-prog],[data-ibx],[data-ws],[data-dctab],[data-cyc],[data-plv],[data-crep],[data-co],[data-bs],[data-fsel],[data-call],[data-rf],[data-zup],[data-fq],[data-jres],[data-rs],[data-bbx],[data-bbtab],[data-bstart],[data-jm],[data-libf],[data-libx],[data-tone],[data-msq],[data-rfil],[data-dual],[data-fj],[data-fas],[data-addlink],[data-yrs],[data-dev],[data-nav],[data-go],[data-modal],[data-close],[data-scrim],[data-jump],[data-fstart],[data-fnext],[data-fprev],[data-fexit]');
+  const t = e.target.closest('[data-view],[data-role],[data-tier],[data-cohort],[data-aud],[data-aq],[data-ci],[data-ev],[data-svtype],[data-svaud],[data-pstage],[data-admtab],[data-prog],[data-ibx],[data-ws],[data-dctab],[data-cyc],[data-plv],[data-crep],[data-co],[data-bs],[data-fsel],[data-call],[data-rf],[data-zup],[data-fq],[data-jres],[data-rs],[data-bbx],[data-bbtab],[data-bstart],[data-jm],[data-libf],[data-libx],[data-tone],[data-msq],[data-atpl],[data-stype],[data-tz],[data-bench],[data-rfil],[data-dual],[data-fj],[data-fas],[data-addlink],[data-yrs],[data-dev],[data-nav],[data-go],[data-modal],[data-close],[data-scrim],[data-jump],[data-fstart],[data-fnext],[data-fprev],[data-fexit]');
   if (!t) return;
   const d = t.dataset;
   if (d.prog !== undefined && S.role === 'fellow') { if (['pre', 'denied'].includes(S.fas)) S.fas = 'applying'; S.fprog = +d.prog; }
@@ -2991,6 +3350,10 @@ document.addEventListener('click', e => {
   else if (d.libf) S.libf = d.libf;
   else if (d.tone) S.tone = d.tone;
   else if (d.msq) S.msq = d.msq;
+  else if (d.atpl) S.atpl = d.atpl;
+  else if (d.bench) S.bench = d.bench;
+  else if (d.stype) S.stype = d.stype;
+  else if (d.tz) { S.tz = d.tz; if (S.modal === 'tzPick') S.modal = null; }
   else if (d.libx) { const a = S.libopen.split(',').filter(Boolean); S.libopen = d.libx === 'all' ? (a.length ? '' : RES_LIB.map(s => s.k).join(',')) : (a.includes(d.libx) ? a.filter(x => x !== d.libx) : a.concat(d.libx)).join(','); }
   else if (d.rfil) S.rfil = d.rfil;
   else if (d.dual) S.dual = +d.dual;
